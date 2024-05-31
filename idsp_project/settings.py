@@ -10,6 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import os
+import saml2
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -31,12 +33,15 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
     'django.contrib.auth',
+    'django.contrib.admin',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
+    'djangosaml2',
+    'authentication',
 ]
 
 MIDDLEWARE = [
@@ -47,14 +52,74 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'djangosaml2.middleware.SamlSessionMiddleware',
 ]
+
+AUTHENTICATION_BACKENDS = [
+    'djangosaml2.backends.Saml2Backend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# Site ID for django.contrib.sites
+SITE_ID = 1
+
+# SAML Configuration
+SAML_CONFIG = {
+    'xmlsec_binary': '/usr/bin/xmlsec1',
+    'entityid': 'http://localhost:8000/saml2/metadata/',
+    'attribute_map_dir': os.path.join(BASE_DIR, 'attribute-maps'),
+    'service': {
+        'sp': {
+            'name': 'Django SAML2 SP',
+            'endpoints': {
+                'assertion_consumer_service': [
+                    ('http://localhost:8000/saml2/acs/', saml2.BINDING_HTTP_POST),
+                ],
+                'single_logout_service': [
+                    ('http://localhost:8000/saml2/ls/', saml2.BINDING_HTTP_REDIRECT),
+                ],
+            },
+            'allow_unsolicited': True,
+            'authn_requests_signed': False,
+            'logout_requests_signed': True,
+            'logout_responses_signed': True,
+            'want_assertions_signed': True,
+            'want_response_signed': True,
+            'metadata': {
+                'local': [os.path.join(BASE_DIR, 'saml2_config', 'idp_metadata.xml')],
+            },
+            'organization': {
+                'name': [('My Company', 'en')],
+                'display_name': [('My Company', 'en')],
+                'url': [('http://localhost:8000', 'en')],
+            },
+            'contact_person': [
+                {
+                    'given_name': 'Palash',
+                    'sur_name': 'Sarkar',
+                    'company': 'My Company',
+                    'email_address': 'palash.sarkar@protonmail.com',
+                    'contact_type': 'technical',
+                }
+            ],
+        },
+    },
+    'debug': 1,
+    'key_file': os.path.join(BASE_DIR, 'keys', 'sp-key.pem'),  # Private key
+    'cert_file': os.path.join(BASE_DIR, 'keys', 'sp-cert.pem'),  # Public key
+    'encryption_keypairs': [{
+        'key_file': os.path.join(BASE_DIR, 'keys', 'sp-encryption-key.pem'),  # Encryption private key
+        'cert_file': os.path.join(BASE_DIR, 'keys', 'sp-encryption-cert.pem'),  # Encryption public key
+    }],
+    'valid_for': 365 * 24,
+}
 
 ROOT_URLCONF = 'idsp_project.urls'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -109,6 +174,8 @@ TIME_ZONE = 'UTC'
 
 USE_I18N = True
 
+USE_L10N = True
+
 USE_TZ = True
 
 
@@ -116,8 +183,20 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Custom User Model
+AUTH_USER_MODEL = 'authentication.CustomUser'
+
+# Django Authentication Backend
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'djangosaml2.backends.Saml2Backend',
+]
